@@ -1,0 +1,57 @@
+{
+  "//": "Frontline iOS — EAS Build config. Bundle ID app.frontline.intel, Apple Team LMNGCLUC3S (reused from Happy Hour Live; the BUNDLE ID is NOT reused and is NOT yet registered — see DECISIONS.md item 2). No secrets/credentials live here: everything sensitive is referenced by NAME via EAS secrets / env and resolved at build time. See ios/README.md for the operator runbook.",
+  "cli": {
+    "version": ">= 12.0.0",
+    "appVersionSource": "remote"
+  },
+  "build": {
+    "//": "Three profiles mirroring a standard Capacitor + EAS setup. All iOS. The web bundle is produced with BUILD_TARGET=capacitor (Next static export -> out/) then `cap sync ios` copies it into the native shell before EAS compiles it.",
+    "development": {
+      "developmentClient": true,
+      "distribution": "internal",
+      "ios": {
+        "simulator": true,
+        "buildConfiguration": "Debug"
+      },
+      "env": {
+        "BUILD_TARGET": "capacitor",
+        "APP_ENV": "development"
+      }
+    },
+    "preview": {
+      "//": "Ad-hoc / internal distribution build for on-device QA. This is the profile CI runs. It produces an installable .ipa but DOES NOT submit to TestFlight.",
+      "distribution": "internal",
+      "ios": {
+        "simulator": false,
+        "buildConfiguration": "Release"
+      },
+      "env": {
+        "BUILD_TARGET": "capacitor",
+        "APP_ENV": "preview"
+      }
+    },
+    "production": {
+      "//": "App Store / TestFlight-eligible build. Building this artifact is allowed; SUBMITTING it is the gated step (see eas submit config below and DECISIONS.md item 5).",
+      "distribution": "store",
+      "autoIncrement": true,
+      "ios": {
+        "simulator": false,
+        "buildConfiguration": "Release"
+      },
+      "env": {
+        "BUILD_TARGET": "capacitor",
+        "APP_ENV": "production"
+      }
+    }
+  },
+  "submit": {
+    "//": "GATED — do not run `eas submit` without explicit approval (DECISIONS.md item 5). Values are referenced by NAME only and must be supplied as EAS secrets at submit time; none are embedded here. Required secrets: EXPO_APPLE_APP_SPECIFIC_PASSWORD or an App Store Connect API key (ASC_KEY_ID, ASC_ISSUER_ID, ASC_KEY_P8) — see ios/README.md.",
+    "production": {
+      "ios": {
+        "appleId": "APPLE_ID_EMAIL_ENV",
+        "ascAppId": "ASC_APP_ID_ENV",
+        "appleTeamId": "LMNGCLUC3S"
+      }
+    }
+  }
+}

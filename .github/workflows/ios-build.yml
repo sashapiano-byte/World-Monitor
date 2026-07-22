@@ -1,0 +1,147 @@
+# Frontline — iOS build pipeline (Capacitor + EAS)
+#
+# WHAT THIS DOES (automated, safe):
+#   1. Builds the web app as a static export (BUILD_TARGET=capacitor -> out/).
+#   2. Generates / syncs the native iOS project with `cap sync ios`.
+#   3. Runs an EAS *build* for the `preview` profile (produces an .ipa; no store upload).
+#
+# WHAT THIS DOES NOT DO (GATED — see DECISIONS.md item 5):
+#   - It NEVER runs `eas submit`. TestFlight/App Store submission is hard-gated
+#     behind a manual, defaulted-false confirmation and an `if: false` backstop.
+#   - The bundle ID app.frontline.intel is NOT yet registered on the Apple
+#     Developer portal (DECISIONS.md item 2). Until it is + credentials exist,
+#     the EAS steps will no-op-fail rather than submit anything.
+#
+# SECRETS (referenced by NAME only — configure in repo Settings > Secrets, or as
+# EAS secrets; no values live in this repo):
+#   - EXPO_TOKEN                 (EAS/Expo auth for CI)
+# Submit-only (NOT used by this workflow; listed for the operator):
+#   - ASC_KEY_ID, ASC_ISSUER_ID, ASC_KEY_P8  (App Store Connect API key)
+#   - APPLE_ID_EMAIL, ASC_APP_ID             (eas submit targeting)
+
+name: iOS Build (Capacitor + EAS)
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm_submit:
+        description: "GATED: do not enable without approval — see DECISIONS.md item 5. Set to 'true' ONLY after the App ID is registered and submission is approved. Leaving it false (default) builds but never submits to TestFlight."
+        required: false
+        default: "false"
+        type: choice
+        options:
+          - "false"
+          - "true"
+  push:
+    branches: [main]
+    paths:
+      - "app/**"
+      - "components/**"
+      - "lib/**"
+      - "ios/**"
+      - "capacitor.config.ts"
+      - "eas.json"
+      - ".github/workflows/ios-build.yml"
+
+concurrency:
+  group: ios-build-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Build web + sync iOS + EAS build (preview)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build web (static export for Capacitor)
+        env:
+          BUILD_TARGET: capacitor
+        run: npm run build
+
+      - name: Add iOS platform if missing
+        # `cap sync` requires the native project to exist. On a fresh CI checkout
+        # ios/App is generated here; locally the operator runs this once (see ios/README.md).
+        run: |
+          if [ ! -d "ios/App" ]; then
+            npx cap add ios
+          fi
+
+      - name: Sync web assets into iOS shell
+        run: npx cap sync ios
+
+      - name: Setup EAS
+        uses: expo/expo-github-action@v8
+        with:
+          eas-version: latest
+          token: ${{ secrets.EXPO_TOKEN }}
+
+      - name: EAS Build (preview, no submit)
+        # Builds an installable .ipa. Does NOT upload to TestFlight.
+        # --non-interactive so missing credentials fail loudly instead of prompting.
+        run: eas build --platform ios --profile preview --non-interactive --no-wait
+
+  # ---------------------------------------------------------------------------
+  # GATED: TestFlight submission. DO NOT ENABLE WITHOUT APPROVAL.
+  # See DECISIONS.md item 5 ("No TestFlight submission without approval").
+  #
+  # Two independent guards, both must be lifted deliberately:
+  #   (1) `if: false` backstop — a human must edit this line to `if: true`
+  #       (kept alongside the input check so it can't be triggered by dispatch alone).
+  #   (2) confirm_submit == 'true' — manual workflow_dispatch input, defaults false.
+  #
+  # Until the App ID app.frontline.intel is registered under Team LMNGCLUC3S and
+  # ASC credentials are configured, this job cannot succeed even if un-gated.
+  # ---------------------------------------------------------------------------
+  submit_testflight:
+    name: "GATED — TestFlight submit (disabled)"
+    needs: build
+    runs-on: ubuntu-latest
+    # GATED: both conditions required. `false &&` is the hard backstop — remove it
+    # only under explicit approval per DECISIONS.md item 5.
+    if: ${{ false && github.event.inputs.confirm_submit == 'true' }}
+    steps:
+      - name: Refuse to submit without explicit confirmation
+        run: |
+          echo "TestFlight submission is GATED (DECISIONS.md item 5)."
+          echo "This step is intentionally unreachable until a human lifts both guards."
+          exit 1
+
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Setup EAS
+        uses: expo/expo-github-action@v8
+        with:
+          eas-version: latest
+          token: ${{ secrets.EXPO_TOKEN }}
+
+      # GATED STEP — the actual submission. Kept here, fully written, but only
+      # reachable after the guards above are deliberately lifted AND approval given.
+      - name: EAS Submit to TestFlight (production)
+        env:
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+          ASC_KEY_P8: ${{ secrets.ASC_KEY_P8 }}
+          APPLE_ID_EMAIL: ${{ secrets.APPLE_ID_EMAIL }}
+          ASC_APP_ID: ${{ secrets.ASC_APP_ID }}
+        run: eas submit --platform ios --profile production --non-interactive
