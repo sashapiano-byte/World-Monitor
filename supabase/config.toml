@@ -1,0 +1,27 @@
+# Supabase local dev config for the Frontline project.
+# `supabase start` boots Postgres+PostGIS, Auth, Storage, Realtime locally.
+# Link to the NEW hosted project with `supabase link --project-ref <ref>`.
+project_id = "frontline"
+
+[db]
+port = 54322
+major_version = 15
+
+[api]
+port = 54321
+schemas = ["public"]
+extra_search_path = ["public", "extensions"]
+max_rows = 5000
+
+[studio]
+port = 54323
+
+[storage]
+enabled = true
+
+[auth]
+enabled = true
+site_url = "http://localhost:3000"
+
+[realtime]
+enabled = true

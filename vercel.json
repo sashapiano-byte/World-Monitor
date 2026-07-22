@@ -1,0 +1,17 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "framework": "nextjs",
+  "buildCommand": "next build",
+  "installCommand": "npm install",
+  "regions": ["iad1"],
+  "crons": [
+    {
+      "path": "/api/ingest/run?scope=fast",
+      "schedule": "*/10 * * * *"
+    },
+    {
+      "path": "/api/ingest/run?scope=slow",
+      "schedule": "0 */6 * * *"
+    }
+  ]
+}
