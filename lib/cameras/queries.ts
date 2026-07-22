@@ -13,7 +13,10 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import type { Database } from '@/lib/supabase/types';
 import type { CameraRow, ClientCamera, CameraCategory } from './types';
 
-type DB = SupabaseClient<Database>;
+// Accept any concrete Supabase client (server anon, browser anon, or service).
+// The specific schema generic differs between factories, so keep this loose;
+// callers get precise typing via the `.returns<...>()` casts below.
+type DB = SupabaseClient<Database, 'public', any>;
 
 const CAMERA_COLUMNS =
   'id, conflict_id, title, description, provider, stream_type, external_id, url, embed_url, lng, lat, location_name, city, country, tags, is_live, status, tos_reviewed';
