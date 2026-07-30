@@ -1,0 +1,83 @@
+name: CI
+
+on:
+  push:
+    paths: ['industrial-damage-map/**']
+  pull_request:
+    paths: ['industrial-damage-map/**']
+
+defaults:
+  run:
+    working-directory: industrial-damage-map
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: industrial-damage-map/package-lock.json
+
+      - run: npm ci
+
+      - name: Type check
+        run: npm run typecheck
+
+      # The editorial gate. Exits non-zero on any error-severity finding, so a
+      # record that breaks the methodology cannot reach the default branch.
+      - name: Quality control
+        run: npm run qc
+
+      - name: Unit tests
+        run: npm test
+
+      - name: Build
+        run: npm run build
+
+      - name: Install Playwright browser
+        run: npx playwright install --with-deps chromium
+
+      - name: End-to-end tests
+        run: npm run test:e2e
+        env:
+          DATA_BACKEND: file
+
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: playwright-report
+          path: industrial-damage-map/playwright-report/
+          retention-days: 7
+
+  database:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgis/postgis:16-3.4
+        env:
+          POSTGRES_USER: idm
+          POSTGRES_PASSWORD: idm_ci
+          POSTGRES_DB: industrial_damage
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U idm -d industrial_damage"
+          --health-interval 5s --health-timeout 5s --health-retries 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: industrial-damage-map/package-lock.json
+      - run: npm ci
+
+      # Proves the SQL migration applies cleanly and that the CHECK constraints
+      # accept the shipped dataset — the schema is the backstop for the
+      # editorial rules, so it has to be exercised, not just written.
+      - name: Migrate and seed
+        run: npm run db:migrate -- --seed
+        env:
+          DATABASE_URL: postgres://idm:idm_ci@localhost:5432/industrial_damage

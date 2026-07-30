@@ -1,3 +1,9 @@
+> **This repository contains two independent projects.**
+> This README describes **Frontline**. For the OSINT research database and map
+> of Russian industrial facilities damaged since 24 February 2022, see
+> [`industrial-damage-map/`](./industrial-damage-map/README.md) — it is
+> self-contained and runs with its own `docker compose up --build`.
+
 # Frontline — Global Conflict Intelligence
 
 Multi-conflict, multi-camera global intelligence dashboard (web + iOS).

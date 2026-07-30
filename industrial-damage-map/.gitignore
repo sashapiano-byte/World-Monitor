@@ -1,0 +1,31 @@
+node_modules/
+.next/
+out/
+build/
+dist/
+coverage/
+.vercel
+.turbo
+*.tsbuildinfo
+next-env.d.ts
+
+# env / secrets — never commit real keys
+.env
+.env.local
+.env*.local
+!.env.example
+
+# test artifacts (screenshots/ IS committed — it is a deliverable)
+/test-results/
+/playwright-report/
+/blob-report/
+/playwright/.cache/
+
+# generated exports
+/exports/
+
+.DS_Store
+npm-debug.log*
+
+# Optional local CA for building behind a TLS-intercepting proxy.
+docker/certs/ca.crt

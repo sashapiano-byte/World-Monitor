@@ -1,0 +1,59 @@
+services:
+  db:
+    image: postgis/postgis:16-3.4
+    container_name: idm_db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-idm}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-idm_dev_password}
+      POSTGRES_DB: ${POSTGRES_DB:-industrial_damage}
+    ports:
+      - '${POSTGRES_PORT:-55432}:5432'
+    volumes:
+      - db_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U ${POSTGRES_USER:-idm} -d ${POSTGRES_DB:-industrial_damage}']
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  # One-shot: applies SQL migrations, then loads the version-controlled dataset.
+  migrate:
+    build:
+      context: .
+      target: runner
+    container_name: idm_migrate
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgres://${POSTGRES_USER:-idm}:${POSTGRES_PASSWORD:-idm_dev_password}@db:5432/${POSTGRES_DB:-industrial_damage}
+      NODE_ENV: production
+    command: ['node_modules/.bin/tsx', 'db/migrate.ts', '--seed']
+    restart: 'no'
+
+  web:
+    build:
+      context: .
+      target: runner
+    container_name: idm_web
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    environment:
+      DATABASE_URL: postgres://${POSTGRES_USER:-idm}:${POSTGRES_PASSWORD:-idm_dev_password}@db:5432/${POSTGRES_DB:-industrial_damage}
+      NEXT_PUBLIC_BASEMAP_STYLE_URL: ${NEXT_PUBLIC_BASEMAP_STYLE_URL:-}
+      NEXT_PUBLIC_SITE_URL: ${NEXT_PUBLIC_SITE_URL:-http://localhost:3000}
+      DATA_BACKEND: ${DATA_BACKEND:-auto}
+      NODE_ENV: production
+      PORT: '3000'
+      HOSTNAME: '0.0.0.0'
+    ports:
+      - '${WEB_PORT:-3000}:3000'
+    command: ['node', 'server.js']
+
+volumes:
+  db_data:
