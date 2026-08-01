@@ -134,9 +134,11 @@ app/                     Next.js App Router — pages and API routes
 components/              Map, filters, legend, facility card, charts, UI primitives
 ingest/                  Feed/CSV readers, name matching, intake pipeline
 tests/unit/              71 Vitest tests
-tests/e2e/               22 Playwright tests
+tests/e2e/               26 Playwright tests
 docs/                    Deployment, backup, editorial runbooks, imagery
-screenshots/             UI captures
+public/basemap/          Bundled Natural Earth coastline (offline fallback)
+scripts/                 QC report, static export, basemap build, screenshots
+screenshots/             UI captures (regenerate with `npm run screenshots`)
 ```
 
 ---
@@ -153,6 +155,8 @@ npm run typecheck    # tsc --noEmit
 npm run db:migrate   # apply SQL migrations
 npm run db:seed      # load ./data into Postgres (QC-gated)
 npm run ingest:demo  # candidate discovery against a bundled demo input
+npm run screenshots  # regenerate screenshots/ against a running server
+npm run basemap:build -- <countries.geojson> <lakes.geojson>   # rebuild public/basemap
 ```
 
 ---
@@ -166,6 +170,16 @@ primitives on Radix · Zod · Vitest · Playwright · Docker Compose.
 No Google Maps dependency and no mapping API key: the basemap style is built
 locally from OSM raster tiles. Point `NEXT_PUBLIC_BASEMAP_STYLE_URL` at your own
 vector style to replace it.
+
+**The map works with no network access to any third party.** OSM tiles come from
+the public internet and often do not arrive — restricted networks, corporate
+proxies, offline demos. Underneath them the app draws a bundled Natural Earth
+coastline ([`public/basemap/`](./public/basemap/README.md), 178 KB, public
+domain, same-origin), so the geography, the clusters and the markers are always
+there. Cluster counts are canvas-rendered numerals rather than map labels,
+because a MapLibre `text-field` needs a glyph server this project deliberately
+does not run. Two end-to-end tests block `tile.openstreetmap.org` outright and
+assert the map is still a map.
 
 Two deliberate departures from the original stack sketch, both recorded in
 [DECISIONS.md](./DECISIONS.md): React Query was dropped in favour of Next.js

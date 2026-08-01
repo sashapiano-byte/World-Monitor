@@ -69,6 +69,7 @@ export function Explorer({ views, industries, regions, dateBounds }: ExplorerPro
                 'rounded px-3 py-1 text-xs font-medium transition-colors',
                 mode === 'map' ? 'bg-background shadow-sm' : 'text-muted-foreground',
               )}
+              data-testid="view-map"
             >
               Map
             </button>

@@ -21,6 +21,9 @@ export function Legend({ industries, className }: { industries: IndustryRecord[]
 
   return (
     <div
+      // Read by MapView when framing the data, so records do not end up
+      // permanently hidden underneath this panel.
+      data-map-overlay="legend"
       className={cn(
         // The legend is absolutely positioned inside the map. Without a height
         // cap it grows upward past the map container and swallows clicks meant

@@ -22,6 +22,73 @@ test.describe('map explorer', () => {
       .toBeGreaterThan(0);
   });
 
+  test('still draws a coastline when basemap tiles are unavailable', async ({ page }) => {
+    // Markers alone are not a map. With third-party tiles blocked the bundled
+    // Natural Earth geography must still be there, so a reader has a coastline
+    // to place a marker against instead of an empty rectangle.
+    await page.route('https://tile.openstreetmap.org/**', (route) => route.abort());
+    await page.goto('/');
+    const canvas = page.getByTestId('map-canvas');
+    await expect
+      .poll(async () => Number((await canvas.getAttribute('data-basemap-rings')) ?? '0'), { timeout: 20_000 })
+      .toBeGreaterThan(100);
+
+    // Polled, not sampled once: the first frame after the source is set can
+    // still report nothing painted.
+    await expect
+      .poll(
+        async () =>
+          page.evaluate(() => {
+            const map = (window as unknown as { __map?: { queryRenderedFeatures: (o: unknown) => unknown[] } }).__map;
+            if (!map) return -1;
+            return map.queryRenderedFeatures({ layers: ['base-land-fill'] }).length;
+          }),
+        { timeout: 20_000 },
+      )
+      .toBeGreaterThan(0);
+  });
+
+  test('labels clusters without depending on a font server', async ({ page }) => {
+    // Regression guard: the style has no `glyphs` URL, so a symbol layer using
+    // `text-field` renders nothing at all. Counts are canvas-rendered icons.
+    await page.route('https://tile.openstreetmap.org/**', (route) => route.abort());
+    await page.goto('/');
+    const canvas = page.getByTestId('map-canvas');
+    await expect(canvas).toHaveAttribute('data-map-state', 'ready');
+
+    type Probe = {
+      hasImage: (id: string) => boolean;
+      getLayer: (id: string) => unknown;
+      queryRenderedFeatures: (o: unknown) => unknown[];
+    };
+    const read = () =>
+      page.evaluate(() => {
+        const map = (window as unknown as { __map?: Probe }).__map;
+        if (!map) return null;
+        return {
+          hasIcons: map.hasImage('cluster-2') && map.hasImage('cluster-99'),
+          hasLayer: Boolean(map.getLayer('cluster-count')),
+          clusters: map.queryRenderedFeatures({ layers: ['clusters'] }).length,
+        };
+      });
+
+    // Clustering settles a frame or two after the style is ready.
+    await expect.poll(async () => (await read())?.clusters ?? 0, { timeout: 20_000 }).toBeGreaterThan(0);
+    const state = await read();
+    expect(state?.hasIcons).toBe(true);
+    expect(state?.hasLayer).toBe(true);
+  });
+
+  test('serves the bundled basemap as a same-origin asset', async ({ request }) => {
+    const res = await request.get('/basemap/eurasia-50m.json');
+    expect(res.ok()).toBeTruthy();
+    const body = await res.json();
+    expect(body.attribution).toContain('Natural Earth');
+    expect(body.land.length).toBeGreaterThan(50);
+    // Crimea must never ship inside the Russian land rings.
+    expect(body.occupiedCrimea.length).toBe(1);
+  });
+
   test('search narrows the result set', async ({ page }) => {
     await page.goto('/');
     const summary = page.getByTestId('result-summary');
